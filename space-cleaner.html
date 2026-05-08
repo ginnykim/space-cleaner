@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Space Cleaner — Fix non-breaking spaces from Word/Figma</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1f242d;
+    --border: #2a313d;
+    --text: #e7ebf1;
+    --muted: #9aa3b2;
+    --accent: #7c9cff;
+    --accent-strong: #5e80ff;
+    --good: #4ade80;
+    --warn: #fbbf24;
+    --danger: #f87171;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    min-height: 100vh;
+  }
+
+  .wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+  }
+
+  header h1 {
+    margin: 0 0 6px 0;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  header p {
+    margin: 0 0 24px 0;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  @media (max-width: 820px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 320px;
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-2);
+  }
+
+  .panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.02em;
+  }
+
+  .panel-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  textarea {
+    flex: 1;
+    width: 100%;
+    min-height: 280px;
+    padding: 14px;
+    background: transparent;
+    color: var(--text);
+    border: 0;
+    outline: none;
+    resize: vertical;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+  }
+
+  textarea::placeholder {
+    color: var(--muted);
+  }
+
+  /* Output reveal mode for spotting invisible chars */
+  .output-mono {
+    flex: 1;
+    width: 100%;
+    min-height: 280px;
+    padding: 14px;
+    background: transparent;
+    color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, transform 80ms ease;
+  }
+
+  .btn:hover { background: #262d39; border-color: #3a4150; }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #0f1115;
+  }
+  .btn.primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+  .btn.ghost { background: transparent; }
+
+  .controls {
+    margin: 16px 0 16px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .stats {
+    margin-top: 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+
+  .stats h3 {
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--border);
+    font-size: 13px;
+  }
+  .stat-row:last-child { border-bottom: 0; }
+
+  .stat-name {
+    color: var(--text);
+  }
+  .stat-name .codepoint {
+    color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    margin-left: 8px;
+  }
+  .stat-count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--good);
+  }
+  .stat-count.zero {
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .toggle-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1c2230;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 200ms ease, transform 200ms ease;
+    pointer-events: none;
+    z-index: 50;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .legend {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 10px;
+    line-height: 1.5;
+  }
+
+  .credit {
+    margin-top: 32px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    opacity: 0.75;
+  }
+  .credit .heart {
+    display: inline-block;
+    transform: translateY(1px);
+    color: #f87171;
+  }
+
+  /* Reveal mode highlights inside output */
+  .reveal-nbsp,
+  .reveal-zw,
+  .reveal-other {
+    display: inline-block;
+    padding: 0 2px;
+    border-radius: 3px;
+    font-size: 11px;
+    line-height: 1.2;
+    transform: translateY(-1px);
+    margin: 0 1px;
+  }
+  .reveal-nbsp { background: rgba(251, 191, 36, 0.18); color: var(--warn); border: 1px solid rgba(251,191,36,0.4); }
+  .reveal-zw   { background: rgba(248, 113, 113, 0.18); color: var(--danger); border: 1px solid rgba(248,113,113,0.4); }
+  .reveal-other{ background: rgba(124, 156, 255, 0.18); color: var(--accent); border: 1px solid rgba(124,156,255,0.4); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Space Cleaner</h1>
+      <p>Paste copy from Word, Google Docs, or anywhere else. This strips out non-breaking spaces and other invisible whitespace that turns your text into one-long-word in Figma.</p>
+    </header>
+
+    <div class="grid">
+      <section class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Paste here</span>
+          <div class="panel-actions">
+            <button class="btn ghost" id="pasteBtn" title="Paste from clipboard">Paste</button>
+            <button class="btn ghost" id="clearBtn" title="Clear input">Clear</button>
+          </div>
+        </div>
+        <textarea id="input" spellcheck="false" placeholder="Paste your text here…"></textarea>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Cleaned output</span>
+          <div class="panel-actions">
+            <button class="btn ghost" id="revealBtn" title="Show invisible characters">Reveal invisibles</button>
+            <button class="btn primary" id="copyBtn" title="Copy cleaned text">Copy</button>
+          </div>
+        </div>
+        <div id="output" class="output-mono" contenteditable="false" aria-readonly="true"></div>
+      </section>
+    </div>
+
+    <div class="controls">
+      <div class="toggle-row">
+        <label><input type="checkbox" id="optNbsp" checked /> Replace NBSP &amp; narrow NBSP with normal space</label>
+        <label><input type="checkbox" id="optZeroWidth" checked /> Strip zero-width characters</label>
+        <label><input type="checkbox" id="optOtherSpaces" checked /> Normalize other Unicode spaces</label>
+        <label><input type="checkbox" id="optTrim" /> Collapse multiple spaces</label>
+      </div>
+    </div>
+
+    <div class="stats" id="stats">
+      <h3>What was cleaned</h3>
+      <div id="statsBody"></div>
+      <p class="legend">
+        Tip: <span class="reveal-nbsp">·NBSP·</span> marks non-breaking spaces, <span class="reveal-zw">·ZW·</span> marks zero-width chars, <span class="reveal-other">·SP·</span> marks other Unicode spaces. Toggle "Reveal invisibles" on the output to see them.
+      </p>
+    </div>
+
+    <p class="credit">
+      Built with <span class="heart">&#9829;</span> by Ginny Kim &nbsp;·&nbsp; Riffing on a clever fix that Aaron Kotara cracked first
+    </p>
+  </div>
+
+  <div id="toast" class="toast">Copied to clipboard</div>
+
+<script>
+  // Characters we care about. Each entry: { char, name, type }
+  // type: 'nbsp' (replace with space), 'zw' (strip), 'other' (replace with space)
+  const TARGETS = [
+    // NBSP family
+    { ch: ' ', name: 'No-break space',          cp: 'U+00A0', type: 'nbsp'  },
+    { ch: ' ', name: 'Narrow no-break space',   cp: 'U+202F', type: 'nbsp'  },
+    { ch: '﻿', name: 'Zero-width no-break space (BOM)', cp: 'U+FEFF', type: 'zw' },
+
+    // Zero-width
+    { ch: '​', name: 'Zero-width space',        cp: 'U+200B', type: 'zw'    },
+    { ch: '‌', name: 'Zero-width non-joiner',   cp: 'U+200C', type: 'zw'    },
+    { ch: '‍', name: 'Zero-width joiner',       cp: 'U+200D', type: 'zw'    },
+    { ch: '⁠', name: 'Word joiner',             cp: 'U+2060', type: 'zw'    },
+
+    // Other Unicode spaces
+    { ch: ' ', name: 'En quad',                 cp: 'U+2000', type: 'other' },
+    { ch: ' ', name: 'Em quad',                 cp: 'U+2001', type: 'other' },
+    { ch: ' ', name: 'En space',                cp: 'U+2002', type: 'other' },
+    { ch: ' ', name: 'Em space',                cp: 'U+2003', type: 'other' },
+    { ch: ' ', name: 'Three-per-em space',      cp: 'U+2004', type: 'other' },
+    { ch: ' ', name: 'Four-per-em space',       cp: 'U+2005', type: 'other' },
+    { ch: ' ', name: 'Six-per-em space',        cp: 'U+2006', type: 'other' },
+    { ch: ' ', name: 'Figure space',            cp: 'U+2007', type: 'other' },
+    { ch: ' ', name: 'Punctuation space',       cp: 'U+2008', type: 'other' },
+    { ch: ' ', name: 'Thin space',              cp: 'U+2009', type: 'other' },
+    { ch: ' ', name: 'Hair space',              cp: 'U+200A', type: 'other' },
+    { ch: ' ', name: 'Medium mathematical space', cp: 'U+205F', type: 'other' },
+    { ch: '　', name: 'Ideographic space',       cp: 'U+3000', type: 'other' },
+  ];
+
+  const els = {
+    input: document.getElementById('input'),
+    output: document.getElementById('output'),
+    stats: document.getElementById('statsBody'),
+    pasteBtn: document.getElementById('pasteBtn'),
+    clearBtn: document.getElementById('clearBtn'),
+    copyBtn: document.getElementById('copyBtn'),
+    revealBtn: document.getElementById('revealBtn'),
+    toast: document.getElementById('toast'),
+    optNbsp: document.getElementById('optNbsp'),
+    optZeroWidth: document.getElementById('optZeroWidth'),
+    optOtherSpaces: document.getElementById('optOtherSpaces'),
+    optTrim: document.getElementById('optTrim'),
+  };
+
+  let revealMode = false;
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function clean(text) {
+    const counts = {};
+    for (const t of TARGETS) counts[t.cp] = 0;
+
+    // First pass: count occurrences of every target
+    for (const t of TARGETS) {
+      // count by splitting (cheap and accurate for single-char targets)
+      const parts = text.split(t.ch);
+      counts[t.cp] = parts.length - 1;
+    }
+
+    let cleaned = text;
+
+    // Apply replacements based on toggles
+    for (const t of TARGETS) {
+      if (counts[t.cp] === 0) continue;
+
+      let shouldReplace = false;
+      let replacement = ' ';
+
+      if (t.type === 'nbsp' && els.optNbsp.checked) {
+        shouldReplace = true; replacement = ' ';
+      } else if (t.type === 'zw' && els.optZeroWidth.checked) {
+        shouldReplace = true; replacement = '';
+      } else if (t.type === 'other' && els.optOtherSpaces.checked) {
+        shouldReplace = true; replacement = ' ';
+      }
+
+      if (shouldReplace) {
+        cleaned = cleaned.split(t.ch).join(replacement);
+      }
+    }
+
+    // Optional: collapse runs of spaces (preserve newlines)
+    if (els.optTrim.checked) {
+      cleaned = cleaned.replace(/[ \t]{2,}/g, ' ');
+    }
+
+    return { cleaned, counts };
+  }
+
+  function renderReveal(text) {
+    // Build HTML where invisible chars are replaced with visible chips, others escaped
+    let html = '';
+    for (const ch of text) {
+      const t = TARGETS.find(x => x.ch === ch);
+      if (t) {
+        const cls = t.type === 'nbsp' ? 'reveal-nbsp'
+                  : t.type === 'zw'   ? 'reveal-zw'
+                  :                      'reveal-other';
+        const label = t.type === 'zw' ? 'ZW' : (t.type === 'nbsp' ? 'NBSP' : 'SP');
+        html += `<span class="${cls}" title="${t.name} (${t.cp})">·${label}·</span>`;
+      } else if (ch === '\n') {
+        html += '\n';
+      } else {
+        html += escapeHtml(ch);
+      }
+    }
+    return html;
+  }
+
+  function renderStats(counts) {
+    const rows = TARGETS
+      .map(t => ({ ...t, count: counts[t.cp] || 0 }))
+      .filter(r => r.count > 0)
+      .sort((a, b) => b.count - a.count);
+
+    if (rows.length === 0) {
+      els.stats.innerHTML = `<div class="stat-row"><span class="stat-name">No invisible characters detected</span><span class="stat-count zero">0</span></div>`;
+      return;
+    }
+
+    els.stats.innerHTML = rows.map(r => `
+      <div class="stat-row">
+        <span class="stat-name">${r.name}<span class="codepoint">${r.cp}</span></span>
+        <span class="stat-count">${r.count}</span>
+      </div>
+    `).join('');
+  }
+
+  function update() {
+    const raw = els.input.value;
+    const { cleaned, counts } = clean(raw);
+
+    if (revealMode) {
+      els.output.innerHTML = renderReveal(cleaned);
+    } else {
+      // Plain text view (still rendered as HTML-escaped to preserve whitespace)
+      els.output.textContent = cleaned;
+    }
+
+    // Stash cleaned text for copy
+    els.output.dataset.cleaned = cleaned;
+
+    renderStats(counts);
+  }
+
+  function showToast(msg) {
+    els.toast.textContent = msg;
+    els.toast.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => els.toast.classList.remove('show'), 1600);
+  }
+
+  // Events
+  els.input.addEventListener('input', update);
+  els.optNbsp.addEventListener('change', update);
+  els.optZeroWidth.addEventListener('change', update);
+  els.optOtherSpaces.addEventListener('change', update);
+  els.optTrim.addEventListener('change', update);
+
+  els.clearBtn.addEventListener('click', () => {
+    els.input.value = '';
+    update();
+    els.input.focus();
+  });
+
+  els.pasteBtn.addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      els.input.value = text;
+      update();
+      showToast('Pasted from clipboard');
+    } catch (e) {
+      showToast('Couldn’t read clipboard — paste manually with Cmd/Ctrl+V');
+    }
+  });
+
+  els.copyBtn.addEventListener('click', async () => {
+    const text = els.output.dataset.cleaned || '';
+    if (!text) { showToast('Nothing to copy yet'); return; }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('Copied cleaned text');
+    } catch (e) {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); showToast('Copied cleaned text'); }
+      catch { showToast('Copy failed — select manually'); }
+      document.body.removeChild(ta);
+    }
+  });
+
+  els.revealBtn.addEventListener('click', () => {
+    revealMode = !revealMode;
+    els.revealBtn.textContent = revealMode ? 'Hide invisibles' : 'Reveal invisibles';
+    update();
+  });
+
+  // Demo seed so the user sees it work immediately
+  const demo = 'It is processing the sentence like this (one long word)';
+  els.input.value = demo;
+  update();
+</script>
+</body>
+</html>
