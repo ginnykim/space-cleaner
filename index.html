@@ -543,8 +543,10 @@
     update();
   });
 
-  // Demo seed so the user sees it work immediately
-  const demo = 'It is processing the sentence like this (one long word)';
+  // Demo seed: every space below is a real non-breaking space (the actual culprit
+  // designers hit when copying from Word/Docs into Figma). One zero-width space
+  // is tucked inside 'cursed[ZW]mega-word' so the stats panel lights up too.
+  const demo = 'Heads up — every space here is a non-breaking imposter. Paste me into Figma and I'll collapse into one stubborn mega​-word. Hit Copy for a version your text frame will thank you for.';
   els.input.value = demo;
   update();
 </script>
